@@ -16,7 +16,7 @@ try:
         st.secrets["gcp_service_account"], scopes=scope
     )
     client = gspread.authorize(creds)
-    sheet = client.open("CigaretteTracker")
+    #sheet = client.open("CigaretteTracker")
 except Exception as e:
     st.error(f"❌ Could not connect to Google Sheets: {e}")
     st.stop()
