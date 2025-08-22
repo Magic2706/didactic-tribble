@@ -146,10 +146,11 @@ st.title("🚬 Smoking Habit & Credit Spend Tracker")
 
 with st.sidebar:
     st.header("Connect to Google Sheet")
-    sheet_url_or_title = st.text_input(
-        "Paste Spreadsheet URL (recommended) or exact title",
-        placeholder="https://docs.google.com/spreadsheets/d/...",
-    )
+    sheet_url_or_title = "https://docs.google.com/spreadsheets/d/1rcfWMw8XRYj9_3j3sAtyh1LIk1s-JiJDjhKweUisXJU/"
+    #st.text_input(
+        #"Paste Spreadsheet URL (recommended) or exact title",
+        #placeholder="https://docs.google.com/spreadsheets/d/...",
+    #)
     st.caption("Make sure you **shared** the sheet with your service account email (Editor).")
 
 if not sheet_url_or_title:
