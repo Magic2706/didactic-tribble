@@ -4,6 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from gspread.exceptions import SpreadsheetNotFound, APIError
 from datetime import date
+import plotly.express as px  # Added for analytics visualizations
 
 # Page configuration
 st.set_page_config(page_title="🚬 Smoking & Spend Tracker", layout="wide")
@@ -230,8 +231,95 @@ def view_edit_delete_tab(ws, df):
                     
                     if e_units > 0:
                         e_packs = e_qty / e_units
-                        e_total = e Prune empty cache
-                        st.rerun()
+                        e_total = e_packs * e_price
+                        e_outstanding = max(e_total - e_paid, 0.0)
+                        
+                        st.markdown("### 💰 Edited Calculation Breakdown")
+                        col_ecalc1, col_ecalc2 = st.columns(2)
+                        with col_ecalc1:
+                            st.info(f"Packs: {e_qty} ÷ {e_units} = {e_packs:.3f} packs\n\n"
+                                    f"Total Cost: {e_packs:.3f} × ₹{e_price:.2f} = ₹{e_total:.2f}")
+                        with col_ecalc2:
+                            st.success(f"Outstanding: ₹{e_total:.2f} - ₹{e_paid:.2f} = ₹{e_outstanding:.2f}\n\n"
+                                       f"Cost per stick: ₹{e_total/e_qty:.2f}")
+                        
+                        if st.button("💾 Update Entry", key=f"update_{sel_idx_1based}", type="primary"):
+                            if e_brand.strip():
+                                row = [
+                                    str(e_date), e_brand.strip(), int(e_qty), int(e_units),
+                                    float(e_price), float(e_total), e_payment,
+                                    float(e_paid), float(e_outstanding), e_vendor.strip(), e_notes.strip()
+                                ]
+                                update_data(ws, sel_idx_1based, row)
+                            else:
+                                st.error("Brand name is required.")
+            
+            with col_delete:
+                st.markdown("### 🗑️ Delete Entry")
+                if st.button("🗑️ Delete Selected Entry", key=f"delete_{sel_idx_1based}", type="secondary"):
+                    delete_data(ws, sel_idx_1based)
+
+def analytics_tab(df):
+    """Render the 'Analytics' tab."""
+    st.subheader("📈 Analytics")
+    
+    if df.empty:
+        st.info("No data available for analytics. Add entries to see insights.")
+        return
+    
+    # Filter out invalid data
+    df = df.dropna(subset=["Date", "Quantity", "TotalCost"]).copy()
+    if df.empty:
+        st.info("No valid data available for analytics after filtering.")
+        return
+    
+    # Spending over time
+    st.markdown("### Total Spending Over Time")
+    df["Date"] = pd.to_datetime(df["Date"])
+    spending = df.groupby(df["Date"].dt.to_period("M"))["TotalCost"].sum().reset_index()
+    spending["Date"] = spending["Date"].dt.to_timestamp()
+    
+    fig_spending = px.line(
+        spending,
+        x="Date",
+        y="TotalCost",
+        title="Monthly Spending Trend",
+        labels={"TotalCost": "Total Cost (₹)", "Date": "Month"},
+        markers=True
+    )
+    st.plotly_chart(fig_spending, use_container_width=True)
+    
+    # Smoking frequency
+    st.markdown("### Smoking Frequency by Brand")
+    brand_freq = df.groupby("Brand")["Quantity"].sum().reset_index()
+    
+    fig_brand = px.bar(
+        brand_freq,
+        x="Brand",
+        y="Quantity",
+        title="Total Sticks Smoked by Brand",
+        labels={"Quantity": "Total Sticks"},
+        color="Brand"
+    )
+    st.plotly_chart(fig_brand, use_container_width=True)
+    
+    # Outstanding balance
+    st.markdown("### Outstanding Balance")
+    total_outstanding = df["Outstanding"].sum()
+    st.metric("Total Outstanding", f"₹{total_outstanding:.2f}")
+    
+    # Payment method breakdown
+    st.markdown("### Payment Method Breakdown")
+    payment_counts = df["PaymentMethod"].value_counts().reset_index()
+    payment_counts.columns = ["PaymentMethod", "Count"]
+    
+    fig_payment = px.pie(
+        payment_counts,
+        names="PaymentMethod",
+        values="Count",
+        title="Transactions by Payment Method"
+    )
+    st.plotly_chart(fig_payment, use_container_width=True)
 
 # ---------- Main Application ----------
 def main():
