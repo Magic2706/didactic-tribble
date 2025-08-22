@@ -269,63 +269,102 @@ with tab_view:
                         delete_row_from_sheet(ws, sheet_row_index)
 
 # --- Tab: Analytics ---
+# ---------- ANALYTICS ----------
 with tab_analytics:
-    st.header("📈 Trends & Insights")
-
-    if df.empty or df['Date'].isnull().all():
-        st.info("Add some entries with valid dates to see analytics.")
+    st.subheader("📈 Trends & Insights")
+    
+    if df.empty:
+        st.info("Add entries to see analytics.")
     else:
-        dfa = df.dropna(subset=['Date']).copy()
-
-        # --- KPIs ---
+        # Prep data
+        dfa = df.copy()
+        dfa["Date"] = pd.to_datetime(dfa["Date"], errors="coerce")
+        dfa = dfa.dropna(subset=["Date"])
+        
+        if len(dfa) == 0:
+            st.warning("No valid date entries found. Please ensure dates are in a valid format (e.g., YYYY-MM-DD).")
+            st.stop()
+        
+        # Fill NaN values with 0 for numeric columns
+        numeric_cols = ["Quantity", "UnitsPerPack", "PricePerPack", "TotalCost", "AmountPaid", "Outstanding"]
+        for col in numeric_cols:
+            if col in dfa.columns:
+                dfa[col] = pd.to_numeric(dfa[col], errors="coerce").fillna(0)
+        
+        # KPIs
         total_sticks = int(dfa["Quantity"].sum())
         total_spend = float(dfa["TotalCost"].sum())
-        outstanding_credit = float(dfa["Outstanding"].sum())
-        days_tracked = (dfa["Date"].max() - dfa["Date"].min()).days + 1
-        avg_sticks_per_day = total_sticks / days_tracked if days_tracked > 0 else 0
-        avg_cost_per_stick = total_spend / total_sticks if total_sticks > 0 else 0
-
-        kpi_cols = st.columns(5)
-        kpi_cols[0].metric("Total Cigarettes", f"{total_sticks:,}")
-        kpi_cols[1].metric("Total Spend", f"₹{total_spend:,.2f}")
-        kpi_cols[2].metric("Outstanding Credit", f"₹{outstanding_credit:,.2f}")
-        kpi_cols[3].metric("Avg Sticks/Day", f"{avg_sticks_per_day:.1f}")
-        kpi_cols[4].metric("Avg Cost/Stick", f"₹{avg_cost_per_stick:.2f}")
-
-        st.markdown("---")
-
-        # --- Time Series Charts ---
-        # Correctly group by date and reset the index to make 'Date' a column
-        by_day = dfa.groupby(dfa["Date"].dt.date).agg(
-            Sticks=("Quantity", "sum"),
-            Spend=("TotalCost", "sum"),
-            Outstanding=("Outstanding", "sum")
-        ).reset_index()
-        by_day["Date"] = pd.to_datetime(by_day["Date"])
-        by_day.set_index("Date", inplace=True)
-
-        chart_col1, chart_col2 = st.columns(2)
-        with chart_col1:
-            st.subheader("Daily Consumption (Sticks)")
-            st.bar_chart(by_day[["Sticks"]], height=300)
-        with chart_col2:
-            st.subheader("Daily Spending (₹)")
-            st.area_chart(by_day[["Spend"]], height=300, color="#ffaa00")
-
-        # --- Brand Analysis ---
-        st.markdown("---")
-        st.subheader("🏷️ Brand Analysis")
-        brand_stats = dfa.groupby("Brand").agg(
-            TotalSticks=("Quantity", "sum"),
-            TotalSpend=("TotalCost", "sum"),
-            Entries=("Brand", "count")
-        ).sort_values("TotalSticks", ascending=False)
-        brand_stats['AvgCostPerStick'] = (brand_stats['TotalSpend'] / brand_stats['TotalSticks']).fillna(0)
+        outstanding = float(dfa["Outstanding"].sum())
+        avg_cost_per_stick = total_spend / max(total_sticks, 1)
+        total_days = (dfa["Date"].max() - dfa["Date"].min()).days + 1
+        avg_sticks_per_day = total_sticks / max(total_days, 1)
         
-        st.dataframe(
-            brand_stats.style.format({
-                'TotalSpend': '₹{:,.2f}',
-                'AvgCostPerStick': '₹{:,.2f}'
-            }),
-            use_container_width=True
-        )
+        # Display KPIs
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Total Cigarettes", f"{total_sticks:,}")
+        col2.metric("Total Spend", f"₹{total_spend:,.2f}")
+        col3.metric("Outstanding Credit", f"₹{outstanding:,.2f}")
+        col4.metric("Avg Cost/Stick", f"₹{avg_cost_per_stick:.2f}")
+        col5.metric("Avg Sticks/Day", f"{avg_sticks_per_day:.1f}")
+
+        # Charts with error handling
+        if len(dfa) > 0:
+            st.divider()
+            
+            # Daily trends
+            by_day = dfa.groupby(dfa["Date"].dt.date, as_index=False).agg(
+                sticks=("Quantity", "sum"),
+                spend=("TotalCost", "sum"),
+                outstanding=("Outstanding", "sum")
+            )
+            
+            # Ensure the grouping column is named "Date"
+            if 'Date' not in by_day.columns and len(by_day.columns) > 0:
+                by_day.columns = ['Date'] + list(by_day.columns[1:])
+            
+            if by_day.empty:
+                st.warning("No data available for daily trends after grouping.")
+            else:
+                by_day["Date"] = pd.to_datetime(by_day["Date"])
+                
+                col_chart1, col_chart2 = st.columns(2)
+                
+                with col_chart1:
+                    st.subheader("📊 Daily Consumption")
+                    st.line_chart(by_day.set_index("Date")[["sticks"]], height=300)
+                
+                with col_chart2:
+                    st.subheader("💰 Daily Spending")
+                    st.line_chart(by_day.set_index("Date")[["spend"]], height=300)
+                
+                st.subheader("📈 Outstanding Credit Over Time")
+                st.line_chart(by_day.set_index("Date")[["outstanding"]], height=300)
+
+            # Brand analysis
+            if "Brand" in dfa.columns and len(dfa) > 0:
+                brand_stats = dfa.groupby("Brand").agg(
+                    total_sticks=("Quantity", "sum"),
+                    total_spend=("TotalCost", "sum"),
+                    total_outstanding=("Outstanding", "sum"),
+                    avg_price_per_pack=("PricePerPack", "mean"),
+                    entries=("Brand", "count")
+                ).round(2)
+                
+                brand_stats["avg_cost_per_stick"] = (brand_stats["total_spend"] / brand_stats["total_sticks"]).round(2)
+                brand_stats = brand_stats.sort_values("total_sticks", ascending=False)
+                
+                st.subheader("🏷️ Brand Analysis")
+                st.dataframe(
+                    brand_stats.style.format({
+                        'total_spend': '₹{:.2f}',
+                        'total_outstanding': '₹{:.2f}',
+                        'avg_price_per_pack': '₹{:.2f}',
+                        'avg_cost_per_stick': '₹{:.2f}'
+                    }), 
+                    use_container_width=True
+                )
+                
+                if len(brand_stats) > 0:
+                    st.bar_chart(brand_stats[["total_sticks"]], height=300)
+        else:
+            st.info("No data available for charts.")
