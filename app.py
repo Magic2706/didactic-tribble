@@ -9,7 +9,12 @@ from datetime import date
 st.set_page_config(page_title="🚬 Smoking & Spend Tracker", layout="wide")
 
 # ---------- Settings ----------
-DEFAULT_COLUMNS = ["Date", "Brand", "Quantity", "UnitsPerPack", "PricePerPack", "TotalCost", "PaymentMethod", "AmountPaid", "Outstanding", "Vendor", "Notes"]
+DEFAULT_COLUMNS = [
+    "Date", "Brand", "Quantity", "UnitsPerPack",
+    "PricePerPack", "TotalCost",
+    "PaymentMethod", "AmountPaid", "Outstanding",
+    "Vendor", "Notes"
+]
 
 def _err(msg, e=None):
     st.error(msg + (f"\n\nDetails: {e}" if e else ""))
