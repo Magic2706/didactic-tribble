@@ -9,7 +9,7 @@ import plotly.express as px
 # Google Sheets Authentication
 # ---------------------------
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name(".env/service_account.json", scope)
 client = gspread.authorize(creds)
 
 # Open your Google Sheet by name
