@@ -267,15 +267,23 @@ def analytics_tab(df):
         st.info("No data available for analytics. Add entries to see insights.")
         return
     
+    # Ensure required columns exist
+    required_cols = ["Date", "Quantity", "TotalCost"]
+    for col in required_cols:
+        if col not in df.columns:
+            st.warning(f"Missing column: {col}. Cannot generate analytics.")
+            return
+
     # Filter out invalid data
-    df = df.dropna(subset=["Date", "Quantity", "TotalCost"]).copy()
+    df = df.dropna(subset=required_cols).copy()
     if df.empty:
         st.info("No valid data available for analytics after filtering.")
         return
     
     # Spending over time
     st.markdown("### Total Spending Over Time")
-    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date"])
     spending = df.groupby(df["Date"].dt.to_period("M"))["TotalCost"].sum().reset_index()
     spending["Date"] = spending["Date"].dt.to_timestamp()
     
@@ -289,37 +297,39 @@ def analytics_tab(df):
     )
     st.plotly_chart(fig_spending, use_container_width=True)
     
-    # Smoking frequency
-    st.markdown("### Smoking Frequency by Brand")
-    brand_freq = df.groupby("Brand")["Quantity"].sum().reset_index()
+    # Smoking frequency by brand (if Brand exists)
+    if "Brand" in df.columns:
+        st.markdown("### Smoking Frequency by Brand")
+        brand_freq = df.groupby("Brand")["Quantity"].sum().reset_index()
+        fig_brand = px.bar(
+            brand_freq,
+            x="Brand",
+            y="Quantity",
+            title="Total Sticks Smoked by Brand",
+            labels={"Quantity": "Total Sticks"},
+            color="Brand"
+        )
+        st.plotly_chart(fig_brand, use_container_width=True)
     
-    fig_brand = px.bar(
-        brand_freq,
-        x="Brand",
-        y="Quantity",
-        title="Total Sticks Smoked by Brand",
-        labels={"Quantity": "Total Sticks"},
-        color="Brand"
-    )
-    st.plotly_chart(fig_brand, use_container_width=True)
+    # Outstanding balance (if Outstanding exists)
+    if "Outstanding" in df.columns:
+        st.markdown("### Outstanding Balance")
+        total_outstanding = df["Outstanding"].sum()
+        st.metric("Total Outstanding", f"₹{total_outstanding:.2f}")
     
-    # Outstanding balance
-    st.markdown("### Outstanding Balance")
-    total_outstanding = df["Outstanding"].sum()
-    st.metric("Total Outstanding", f"₹{total_outstanding:.2f}")
-    
-    # Payment method breakdown
-    st.markdown("### Payment Method Breakdown")
-    payment_counts = df["PaymentMethod"].value_counts().reset_index()
-    payment_counts.columns = ["PaymentMethod", "Count"]
-    
-    fig_payment = px.pie(
-        payment_counts,
-        names="PaymentMethod",
-        values="Count",
-        title="Transactions by Payment Method"
-    )
-    st.plotly_chart(fig_payment, use_container_width=True)
+    # Payment method breakdown (if PaymentMethod exists)
+    if "PaymentMethod" in df.columns:
+        st.markdown("### Payment Method Breakdown")
+        payment_counts = df["PaymentMethod"].value_counts().reset_index()
+        payment_counts.columns = ["PaymentMethod", "Count"]
+        fig_payment = px.pie(
+            payment_counts,
+            names="PaymentMethod",
+            values="Count",
+            title="Transactions by Payment Method"
+        )
+        st.plotly_chart(fig_payment, use_container_width=True)
+
 
 # ---------- Main Application ----------
 def main():
@@ -334,7 +344,7 @@ def main():
         )
         st.caption("Ensure the sheet is shared with your service account email (Editor access).")
         if st.button("🔄 Refresh Data"):
-            load_data.clear()
+            st.cache_data.clear()  # corrected
             st.rerun()
     
     if not sheet_url_or_title:
@@ -358,6 +368,7 @@ def main():
     
     with tab_analytics:
         analytics_tab(df)
+
 
 if __name__ == "__main__":
     main()
