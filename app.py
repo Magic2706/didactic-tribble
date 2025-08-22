@@ -1,120 +1,96 @@
 import streamlit as st
-import pandas as pd
-from google.oauth2.service_account import Credentials
 import gspread
-from datetime import date
-import plotly.express as px
+from google.oauth2.service_account import Credentials
+from gspread.exceptions import SpreadsheetNotFound, APIError
 
-st.set_page_config(page_title="Cigarette Tracker", layout="centered")
-st.title("🚬 Smoking Habit & Cost Tracker")
+# --- Google Sheets Setup ---
+def get_client():
+    try:
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+        )
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Authentication failed: {e}")
+        return None
 
-# -----------------------------
-# 1. Authenticate & Open Sheet
-# -----------------------------
-sheet = None
-try:
-    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    secret = st.secrets["gcp_service_account"]
-    creds = Credentials.from_service_account_info(secret, scopes=scopes)
-    client = gspread.authorize(creds)
-    sheet = client.open("Cigarette Tracker").sheet1
-except Exception as e:
-    st.error("🔒 Could not access Google Sheets. Check your credentials and sheet sharing.")
-    st.stop()
+def get_sheet(sheet_url):
+    client = get_client()
+    if not client:
+        return None
+    try:
+        return client.open_by_url(sheet_url).sheet1
+    except SpreadsheetNotFound:
+        st.error("Could not find spreadsheet. Check URL or sharing permissions.")
+    except APIError as e:
+        st.error(f"Google Sheets API error: {e}")
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+    return None
 
-# -----------------------------
-# 2. CRUD Helper Functions
-# -----------------------------
-@st.cache_data(ttl=300)
-def get_data():
-    data = sheet.get_all_records()
-    return pd.DataFrame(data)
+# --- CRUD FUNCTIONS ---
+def read_all(sheet):
+    try:
+        return sheet.get_all_records()
+    except Exception as e:
+        st.error(f"Failed to read data: {e}")
+        return []
 
-def add_entry(entry):
-    sheet.append_row(entry)
+def create_row(sheet, row_values):
+    try:
+        sheet.append_row(row_values)
+        st.success("Row added successfully.")
+    except Exception as e:
+        st.error(f"Failed to add row: {e}")
 
-def update_entry(idx, updated):
-    sheet.delete_row(idx + 2)
-    sheet.insert_row(updated, idx + 2)
+def update_row(sheet, row_index, new_values):
+    try:
+        sheet.delete_row(row_index)   # remove old row
+        sheet.insert_row(new_values, row_index)  # insert new row
+        st.success("Row updated successfully.")
+    except Exception as e:
+        st.error(f"Failed to update row: {e}")
 
-def delete_entry(idx):
-    sheet.delete_row(idx + 2)
+def delete_row(sheet, row_index):
+    try:
+        sheet.delete_row(row_index)
+        st.success("Row deleted successfully.")
+    except Exception as e:
+        st.error(f"Failed to delete row: {e}")
 
-# -----------------------------
-# 3. Sidebar Menu
-# -----------------------------
-menu = ["Add Entry", "View/Edit Entries", "Analytics"]
-choice = st.sidebar.selectbox("Navigate", menu)
+# --- Streamlit Interface ---
+st.title("Google Sheets CRUD App")
 
-# -----------------------------
-# 4. UI: Add Entry
-# -----------------------------
-if choice == "Add Entry":
-    st.header("Log Your Cigarette Usage")
-    c_date = st.date_input("Date", date.today())
-    brand = st.text_input("Brand")
-    quantity = st.number_input("Quantity (sticks)", min_value=1, step=1)
-    price = st.number_input("Price per Pack", min_value=0.0, format="%.2f")
-    notes = st.text_area("Notes (optional)")
+SHEET_URL = st.text_input("Enter Google Sheet URL", "")
+if SHEET_URL:
+    sheet = get_sheet(SHEET_URL)
+    if sheet:
+        st.subheader("Current Data")
+        data = read_all(sheet)
+        st.write(data if data else "No data found.")
 
-    if st.button("Save Entry"):
-        total_cost = price * (quantity / 20)
-        entry = [str(c_date), brand, quantity, price, total_cost, notes]
-        add_entry(entry)
-        st.success("Entry added!")
-        st.experimental_rerun()
+        # --- Create ---
+        st.subheader("Add New Row")
+        new_row = st.text_input("Enter comma-separated values")
+        if st.button("Add Row"):
+            if new_row:
+                create_row(sheet, [x.strip() for x in new_row.split(",")])
+            else:
+                st.warning("Please enter values.")
 
-# -----------------------------
-# 5. UI: View / Edit
-# -----------------------------
-elif choice == "View/Edit Entries":
-    st.header("View or Modify Entries")
-    df = get_data()
-    if df.empty:
-        st.info("No entries yet.")
-    else:
-        st.dataframe(df)
-        idx = st.number_input("Select Row Index", min_value=0, max_value=len(df) - 1, step=1)
-        row = df.iloc[idx]
+        # --- Update ---
+        st.subheader("Update Existing Row")
+        row_to_update = st.number_input("Row index to update (1 = first row after header)", min_value=2, step=1)
+        update_values = st.text_input("Enter new comma-separated values")
+        if st.button("Update Row"):
+            if update_values:
+                update_row(sheet, int(row_to_update), [x.strip() for x in update_values.split(",")])
+            else:
+                st.warning("Please enter values.")
 
-        with st.form("edit_form"):
-            new_date = st.date_input("Date", pd.to_datetime(row["Date"]).date())
-            new_brand = st.text_input("Brand", row["Brand"])
-            new_qty = st.number_input("Quantity", min_value=1, value=int(row["Quantity"]))
-            new_price = st.number_input("Price per Pack", value=float(row["Price_per_pack"]), format="%.2f")
-            new_notes = st.text_area("Notes", row.get("Notes", ""))
-            submitted = st.form_submit_button("Update")
-
-            if submitted:
-                total = new_price * (new_qty / 20)
-                updated = [str(new_date), new_brand, new_qty, new_price, total, new_notes]
-                update_entry(idx, updated)
-                st.success("Entry updated successfully!")
-                st.experimental_rerun()
-        
-        if st.button("Delete Entry"):
-            delete_entry(idx)
-            st.warning("Entry deleted.")
-            st.experimental_rerun()
-
-# -----------------------------
-# 6. UI: Analytics
-# -----------------------------
-else:
-    st.header("Analytics: Trends & Patterns")
-    df = get_data()
-    if df.empty:
-        st.info("Add some entries first to view analytics.")
-    else:
-        df["Date"] = pd.to_datetime(df["Date"])
-        daily_cigs = df.groupby("Date")["Quantity"].sum().reset_index()
-        fig1 = px.bar(daily_cigs, x="Date", y="Quantity", title="Cigarettes Smoked Per Day")
-        st.plotly_chart(fig1, use_container_width=True)
-
-        spend = df.groupby("Date")["Total_cost"].sum().reset_index()
-        fig2 = px.line(spend, x="Date", y="Total_cost", title="Daily Spending")
-        st.plotly_chart(fig2, use_container_width=True)
-
-        brands = df.groupby("Brand")["Quantity"].sum().reset_index()
-        fig3 = px.pie(brands, names="Brand", values="Quantity", title="Brand Distribution")
-        st.plotly_chart(fig3, use_container_width=True)
+        # --- Delete ---
+        st.subheader("Delete Row")
+        row_to_delete = st.number_input("Row index to delete (1 = first row after header)", min_value=2, step=1)
+        if st.button("Delete Row"):
+            delete_row(sheet, int(row_to_delete))
