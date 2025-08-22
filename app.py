@@ -146,11 +146,10 @@ st.title("🚬 Smoking Habit & Credit Spend Tracker")
 
 with st.sidebar:
     st.header("Connect to Google Sheet")
-    sheet_url_or_title = "https://docs.google.com/spreadsheets/d/1rcfWMw8XRYj9_3j3sAtyh1LIk1s-JiJDjhKweUisXJU/"
-    #st.text_input(
-        #"Paste Spreadsheet URL (recommended) or exact title",
-        #placeholder="https://docs.google.com/spreadsheets/d/...",
-    #)
+    sheet_url_or_title = st.text_input(
+        "Paste Spreadsheet URL (recommended) or exact title",
+        placeholder="https://docs.google.com/spreadsheets/d/...",
+    )
     st.caption("Make sure you **shared** the sheet with your service account email (Editor).")
 
 if not sheet_url_or_title:
@@ -235,15 +234,15 @@ with tab_view:
                     except Exception:
                         return default
 
-                e_date = st.date_input("Date", value=pd.to_datetime(_get(0)).date() if _get(0) else date.today())
-                e_brand = st.text_input("Brand", _get(1))
-                e_qty = st.number_input("Quantity (sticks)", min_value=1, value=int(float(_get(2, float, 1))), step=1)
-                e_units = st.number_input("Units per pack", min_value=1, value=int(float(_get(3, float, 20))), step=1)
-                e_price = st.number_input("Price per pack", min_value=0.0, value=float(_get(4, float, 0.0)), step=0.5, format="%.2f")
-                e_payment = st.selectbox("Payment Method", ["Cash", "Credit"], index=0 if _get(6) == "Cash" else 1)
-                e_paid = st.number_input("Amount paid now", min_value=0.0, value=float(_get(7, float, 0.0)), step=0.5, format="%.2f")
-                e_vendor = st.text_input("Vendor (optional)", _get(9))
-                e_notes = st.text_area("Notes (optional)", _get(10))
+                e_date = st.date_input("Edit Date", value=pd.to_datetime(_get(0)).date() if _get(0) else date.today(), key=f"edit_date_{sel_idx_1based}")
+                e_brand = st.text_input("Edit Brand", _get(1), key=f"edit_brand_{sel_idx_1based}")
+                e_qty = st.number_input("Edit Quantity (sticks)", min_value=1, value=int(float(_get(2, float, 1))), step=1, key=f"edit_qty_{sel_idx_1based}")
+                e_units = st.number_input("Edit Units per pack", min_value=1, value=int(float(_get(3, float, 20))), step=1, key=f"edit_units_{sel_idx_1based}")
+                e_price = st.number_input("Edit Price per pack", min_value=0.0, value=float(_get(4, float, 0.0)), step=0.5, format="%.2f", key=f"edit_price_{sel_idx_1based}")
+                e_payment = st.selectbox("Edit Payment Method", ["Cash", "Credit"], index=0 if _get(6) == "Cash" else 1, key=f"edit_payment_{sel_idx_1based}")
+                e_paid = st.number_input("Edit Amount paid now", min_value=0.0, value=float(_get(7, float, 0.0)), step=0.5, format="%.2f", key=f"edit_paid_{sel_idx_1based}")
+                e_vendor = st.text_input("Edit Vendor (optional)", _get(9), key=f"edit_vendor_{sel_idx_1based}")
+                e_notes = st.text_area("Edit Notes (optional)", _get(10), key=f"edit_notes_{sel_idx_1based}")
 
                 e_total = e_price * (e_qty / max(e_units, 1))
                 e_outstanding = max(e_total - e_paid, 0.0)
