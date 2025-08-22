@@ -8,15 +8,14 @@ import plotly.express as px
 # ---------------------------
 # Google Sheets Authentication
 # ---------------------------
-import streamlit as st
-from google.oauth2.service_account import Credentials
 import gspread
+from google.oauth2.service_account import Credentials
 
 scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-
-creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+creds = Credentials.from_service_account_file("service_account.json", scopes=scope)
 client = gspread.authorize(creds)
 sheet = client.open("Cigarette Tracker").sheet1
+print(sheet.row_values(1))
 # ---------------------------
 # Helper Functions
 # ---------------------------
