@@ -9,7 +9,7 @@ scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/aut
 try:
     creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open("Cigarette Tracker").sheet1
+   # sheet = client.open("Cigarette Tracker").sheet1
 except:
     st.error("Failed to connect to Google Sheets. Check credentials.")
     st.stop()
