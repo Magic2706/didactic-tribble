@@ -9,9 +9,6 @@ import plotly.express as px
 # Authenticate first (GLOBAL)
 # ---------------------------
 
-from google.oauth2.service_account import Credentials
-
-
 scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
 
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
