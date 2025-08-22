@@ -46,8 +46,8 @@ def create_row(sheet, row_values):
 
 def update_row(sheet, row_index, new_values):
     try:
-        sheet.delete_row(row_index)   # remove old row
-        sheet.insert_row(new_values, row_index)  # insert new row
+        sheet.delete_row(row_index)
+        sheet.insert_row(new_values, row_index)
         st.success("Row updated successfully.")
     except Exception as e:
         st.error(f"Failed to update row: {e}")
@@ -59,8 +59,21 @@ def delete_row(sheet, row_index):
     except Exception as e:
         st.error(f"Failed to delete row: {e}")
 
+def find_rows(sheet, keyword):
+    """Return list of (row_index, row_values) where keyword matches any cell."""
+    try:
+        data = sheet.get_all_values()
+        matches = []
+        for i, row in enumerate(data, start=1):  # 1-based index for gspread
+            if any(keyword.lower() in str(cell).lower() for cell in row):
+                matches.append((i, row))
+        return matches
+    except Exception as e:
+        st.error(f"Failed to search rows: {e}")
+        return []
+
 # --- Streamlit Interface ---
-st.title("Google Sheets CRUD App")
+st.title("Google Sheets CRUD App (Safe Mode)")
 
 SHEET_URL = st.text_input("Enter Google Sheet URL", "")
 if SHEET_URL:
@@ -81,16 +94,28 @@ if SHEET_URL:
 
         # --- Update ---
         st.subheader("Update Existing Row")
-        row_to_update = st.number_input("Row index to update (1 = first row after header)", min_value=2, step=1)
-        update_values = st.text_input("Enter new comma-separated values")
-        if st.button("Update Row"):
-            if update_values:
-                update_row(sheet, int(row_to_update), [x.strip() for x in update_values.split(",")])
+        keyword = st.text_input("Search keyword for row to update")
+        if st.button("Search to Update"):
+            matches = find_rows(sheet, keyword)
+            if matches:
+                st.write("Select a row to update:")
+                for idx, row in matches:
+                    if st.button(f"Update Row {idx}: {row}"):
+                        new_values = st.text_input(f"Enter new values for Row {idx} (comma-separated)", key=f"update_{idx}")
+                        if st.button(f"Confirm Update Row {idx}", key=f"confirm_update_{idx}"):
+                            update_row(sheet, idx, [x.strip() for x in new_values.split(",")])
             else:
-                st.warning("Please enter values.")
+                st.warning("No matching rows found.")
 
         # --- Delete ---
-        st.subheader("Delete Row")
-        row_to_delete = st.number_input("Row index to delete (1 = first row after header)", min_value=2, step=1)
-        if st.button("Delete Row"):
-            delete_row(sheet, int(row_to_delete))
+        st.subheader("Delete Existing Row")
+        keyword_del = st.text_input("Search keyword for row to delete")
+        if st.button("Search to Delete"):
+            matches = find_rows(sheet, keyword_del)
+            if matches:
+                st.write("Select a row to delete:")
+                for idx, row in matches:
+                    if st.button(f"Delete Row {idx}: {row}", key=f"delete_{idx}"):
+                        delete_row(sheet, idx)
+            else:
+                st.warning("No matching rows found.")
