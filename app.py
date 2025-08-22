@@ -1,63 +1,61 @@
 import streamlit as st
-import gspread
 import pandas as pd
+import gspread
 from google.oauth2.service_account import Credentials
+from datetime import date
 
-st.set_page_config(page_title="Cigarette Tracker", page_icon="🚬", layout="centered")
-
-# ----------------------------
-# Google Sheets Setup
-# ----------------------------
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-sheet = None
+# Google Sheets Auth
+scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
 try:
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"], scopes=scope
-    )
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     client = gspread.authorize(creds)
-    #sheet = client.open("CigaretteTracker")
-except Exception as e:
-    st.error(f"❌ Could not connect to Google Sheets: {e}")
+    sheet = client.open("Cigarette Tracker").sheet1
+except:
+    st.error("Failed to connect to Google Sheets. Check credentials.")
     st.stop()
 
-# ----------------------------
-# Helper Functions
-# ----------------------------
+# Data functions
 def get_data():
-    """Fetch all records from the Google Sheet as a DataFrame."""
-    if sheet is None:
-        st.error("Google Sheet is not initialized.")
-        return pd.DataFrame()
-    data = sheet.get_all_records()
-    return pd.DataFrame(data)
+    return pd.DataFrame(sheet.get_all_records())
 
-def add_entry(date, count):
-    """Append a new entry to the Google Sheet."""
-    if sheet is not None:
-        sheet.append_row([date, count])
+def add_entry(entry):
+    sheet.append_row(entry)
 
-# ----------------------------
+def update_entry(index, row):
+    sheet.update(f"A{index+2}:E{index+2}", [row])
+
+def delete_entry(index):
+    sheet.delete_rows(index+2)
+
 # Streamlit UI
-# ----------------------------
-st.title("🚬 Cigarette Tracker")
-st.markdown("Log your daily cigarette count and track your progress.")
+st.title("Cigarette Tracker")
+menu = ["Add Entry", "View/Edit"]
+choice = st.sidebar.selectbox("Menu", menu)
 
-# Display existing data
-df = get_data()
-if not df.empty:
-    st.subheader("Your Smoking Log")
-    st.dataframe(df)
+if choice == "Add Entry":
+    c_date = st.date_input("Date", date.today())
+    brand = st.text_input("Brand")
+    qty = st.number_input("Cigarettes", 1)
+    price = st.number_input("Price per Pack", 0.0)
+    if st.button("Add"):
+        total = price * (qty / 20)
+        add_entry([str(c_date), brand, qty, price, total])
+        st.success("Entry added!")
+
 else:
-    st.info("No data found yet. Add your first entry below!")
-
-# Add new entry
-st.subheader("Add New Entry")
-with st.form("entry_form", clear_on_submit=True):
-    date = st.date_input("Date")
-    count = st.number_input("Number of cigarettes", min_value=0, step=1)
-    submitted = st.form_submit_button("Add Entry")
-    if submitted:
-        add_entry(str(date), int(count))
-        st.success("Entry added successfully! Refresh the page to see it.")
-
+    df = get_data()
+    st.dataframe(df)
+    idx = st.number_input("Row to Edit/Delete", min_value=0, max_value=len(df)-1, step=1)
+    action = st.radio("Action", ["Update", "Delete"])
+    if action == "Update":
+        c_date = st.text_input("Date", df.iloc[idx]['Date'])
+        brand = st.text_input("Brand", df.iloc[idx]['Brand'])
+        qty = st.number_input("Cigarettes", value=df.iloc[idx]['Quantity'])
+        price = st.number_input("Price per Pack", value=df.iloc[idx]['Price'])
+        if st.button("Update"):
+            total = price * (qty / 20)
+            update_entry(idx, [c_date, brand, qty, price, total])
+            st.success("Updated!")
+    elif action == "Delete" and st.button("Delete"):
+        delete_entry(idx)
+        st.success("Deleted!")
