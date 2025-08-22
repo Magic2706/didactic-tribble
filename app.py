@@ -1,24 +1,22 @@
 import streamlit as st
-import pandas as pd
+from google.oauth2.service_account import Credentials
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import pandas as pd
 from datetime import date
 import plotly.express as px
 
 # ---------------------------
-# Google Sheets Authentication
+# Authenticate first (GLOBAL)
 # ---------------------------
-
-from google.oauth2.service_account import Credentials
-
-
 scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 client = gspread.authorize(creds)
 
+# Open your sheet globally
+sheet = client.open("Cigarette Tracker").sheet1
+
 # ---------------------------
-# Helper Functions
+# Helper functions
 # ---------------------------
 def get_data():
     data = sheet.get_all_records()
@@ -28,7 +26,6 @@ def add_entry(entry):
     sheet.append_row(entry)
 
 def update_entry(row_index, updated_row):
-    # row_index starts at 0 for pandas but gspread rows start at 2 (1 is header)
     sheet.delete_row(row_index+2)
     sheet.insert_row(updated_row, row_index+2)
 
@@ -56,6 +53,7 @@ if choice == "Add Entry":
         entry = [str(c_date), brand, quantity, price_per_pack, total_cost, notes]
         add_entry(entry)
         st.success("Entry added successfully!")
+
 
 elif choice == "View / Edit Entries":
     st.subheader("View or modify your records")
