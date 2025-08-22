@@ -1,21 +1,22 @@
 import streamlit as st
-from google.oauth2.service_account import Credentials
-import gspread
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from datetime import date
 import plotly.express as px
 
 # ---------------------------
-# Authenticate first (GLOBAL)
+# Google Sheets Authentication
 # ---------------------------
-
-scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-
-creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
 client = gspread.authorize(creds)
+
+# Open your Google Sheet by name
 sheet = client.open("Cigarette Tracker").sheet1
+
 # ---------------------------
-# Helper functions
+# Helper Functions
 # ---------------------------
 def get_data():
     data = sheet.get_all_records()
@@ -25,6 +26,7 @@ def add_entry(entry):
     sheet.append_row(entry)
 
 def update_entry(row_index, updated_row):
+    # row_index starts at 0 for pandas but gspread rows start at 2 (1 is header)
     sheet.delete_row(row_index+2)
     sheet.insert_row(updated_row, row_index+2)
 
@@ -52,7 +54,6 @@ if choice == "Add Entry":
         entry = [str(c_date), brand, quantity, price_per_pack, total_cost, notes]
         add_entry(entry)
         st.success("Entry added successfully!")
-
 
 elif choice == "View / Edit Entries":
     st.subheader("View or modify your records")
@@ -88,7 +89,7 @@ elif choice == "Analytics":
         st.info("No data available yet.")
     else:
         df['Date'] = pd.to_datetime(df['Date'])
-      
+        
         # Cigarettes per day
         daily_cigs = df.groupby('Date')['Quantity'].sum().reset_index()
         fig1 = px.bar(daily_cigs, x='Date', y='Quantity', title="Cigarettes Smoked Per Day")
