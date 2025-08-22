@@ -16,6 +16,7 @@ scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/aut
 
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 client = gspread.authorize(creds)
+sheet = client.open("Cigarette Tracker").sheet1
 # ---------------------------
 # Helper Functions
 # ---------------------------
