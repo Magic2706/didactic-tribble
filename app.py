@@ -42,6 +42,7 @@ def open_sheet(sheet_url_or_title: str):
     if not client:
         return None
     try:
+        sheet_url_or_title = "https://docs.google.com/spreadsheets/d/1rcfWMw8XRYj9_3j3sAtyh1LIk1s-JiJDjhKweUisXJU/"
         if sheet_url_or_title.startswith("http"):
             sh = client.open_by_url(sheet_url_or_title)
         else:
@@ -145,7 +146,6 @@ def search_rows(ws, keyword: str):
 # ---------- UI ----------
 st.title("🚬 Smoking Habit & Credit Spend Tracker")
 
-     sheet_url_or_title = "https://docs.google.com/spreadsheets/d/1rcfWMw8XRYj9_3j3sAtyh1LIk1s-JiJDjhKweUisXJU/" 
 
 if not sheet_url_or_title:
     st.info("Enter your Google Sheet URL or exact title to begin.")
