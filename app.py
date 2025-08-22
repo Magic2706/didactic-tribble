@@ -1,61 +1,120 @@
 import streamlit as st
 import pandas as pd
-import gspread
 from google.oauth2.service_account import Credentials
+import gspread
 from datetime import date
+import plotly.express as px
 
-# Google Sheets Auth
-scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+st.set_page_config(page_title="Cigarette Tracker", layout="centered")
+st.title("🚬 Smoking Habit & Cost Tracker")
+
+# -----------------------------
+# 1. Authenticate & Open Sheet
+# -----------------------------
+sheet = None
 try:
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    secret = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(secret, scopes=scopes)
     client = gspread.authorize(creds)
-   # sheet = client.open("Cigarette Tracker").sheet1
-except:
-    st.error("Failed to connect to Google Sheets. Check credentials.")
+    sheet = client.open("Cigarette Tracker").sheet1
+except Exception as e:
+    st.error("🔒 Could not access Google Sheets. Check your credentials and sheet sharing.")
     st.stop()
 
-# Data functions
+# -----------------------------
+# 2. CRUD Helper Functions
+# -----------------------------
+@st.cache_data(ttl=300)
 def get_data():
-    return pd.DataFrame(sheet.get_all_records())
+    data = sheet.get_all_records()
+    return pd.DataFrame(data)
 
 def add_entry(entry):
     sheet.append_row(entry)
 
-def update_entry(index, row):
-    sheet.update(f"A{index+2}:E{index+2}", [row])
+def update_entry(idx, updated):
+    sheet.delete_row(idx + 2)
+    sheet.insert_row(updated, idx + 2)
 
-def delete_entry(index):
-    sheet.delete_rows(index+2)
+def delete_entry(idx):
+    sheet.delete_row(idx + 2)
 
-# Streamlit UI
-st.title("Cigarette Tracker")
-menu = ["Add Entry", "View/Edit"]
-choice = st.sidebar.selectbox("Menu", menu)
+# -----------------------------
+# 3. Sidebar Menu
+# -----------------------------
+menu = ["Add Entry", "View/Edit Entries", "Analytics"]
+choice = st.sidebar.selectbox("Navigate", menu)
 
+# -----------------------------
+# 4. UI: Add Entry
+# -----------------------------
 if choice == "Add Entry":
+    st.header("Log Your Cigarette Usage")
     c_date = st.date_input("Date", date.today())
     brand = st.text_input("Brand")
-    qty = st.number_input("Cigarettes", 1)
-    price = st.number_input("Price per Pack", 0.0)
-    if st.button("Add"):
-        total = price * (qty / 20)
-        add_entry([str(c_date), brand, qty, price, total])
-        st.success("Entry added!")
+    quantity = st.number_input("Quantity (sticks)", min_value=1, step=1)
+    price = st.number_input("Price per Pack", min_value=0.0, format="%.2f")
+    notes = st.text_area("Notes (optional)")
 
-else:
+    if st.button("Save Entry"):
+        total_cost = price * (quantity / 20)
+        entry = [str(c_date), brand, quantity, price, total_cost, notes]
+        add_entry(entry)
+        st.success("Entry added!")
+        st.experimental_rerun()
+
+# -----------------------------
+# 5. UI: View / Edit
+# -----------------------------
+elif choice == "View/Edit Entries":
+    st.header("View or Modify Entries")
     df = get_data()
-    st.dataframe(df)
-    idx = st.number_input("Row to Edit/Delete", min_value=0, max_value=len(df)-1, step=1)
-    action = st.radio("Action", ["Update", "Delete"])
-    if action == "Update":
-        c_date = st.text_input("Date", df.iloc[idx]['Date'])
-        brand = st.text_input("Brand", df.iloc[idx]['Brand'])
-        qty = st.number_input("Cigarettes", value=df.iloc[idx]['Quantity'])
-        price = st.number_input("Price per Pack", value=df.iloc[idx]['Price'])
-        if st.button("Update"):
-            total = price * (qty / 20)
-            update_entry(idx, [c_date, brand, qty, price, total])
-            st.success("Updated!")
-    elif action == "Delete" and st.button("Delete"):
-        delete_entry(idx)
-        st.success("Deleted!")
+    if df.empty:
+        st.info("No entries yet.")
+    else:
+        st.dataframe(df)
+        idx = st.number_input("Select Row Index", min_value=0, max_value=len(df) - 1, step=1)
+        row = df.iloc[idx]
+
+        with st.form("edit_form"):
+            new_date = st.date_input("Date", pd.to_datetime(row["Date"]).date())
+            new_brand = st.text_input("Brand", row["Brand"])
+            new_qty = st.number_input("Quantity", min_value=1, value=int(row["Quantity"]))
+            new_price = st.number_input("Price per Pack", value=float(row["Price_per_pack"]), format="%.2f")
+            new_notes = st.text_area("Notes", row.get("Notes", ""))
+            submitted = st.form_submit_button("Update")
+
+            if submitted:
+                total = new_price * (new_qty / 20)
+                updated = [str(new_date), new_brand, new_qty, new_price, total, new_notes]
+                update_entry(idx, updated)
+                st.success("Entry updated successfully!")
+                st.experimental_rerun()
+        
+        if st.button("Delete Entry"):
+            delete_entry(idx)
+            st.warning("Entry deleted.")
+            st.experimental_rerun()
+
+# -----------------------------
+# 6. UI: Analytics
+# -----------------------------
+else:
+    st.header("Analytics: Trends & Patterns")
+    df = get_data()
+    if df.empty:
+        st.info("Add some entries first to view analytics.")
+    else:
+        df["Date"] = pd.to_datetime(df["Date"])
+        daily_cigs = df.groupby("Date")["Quantity"].sum().reset_index()
+        fig1 = px.bar(daily_cigs, x="Date", y="Quantity", title="Cigarettes Smoked Per Day")
+        st.plotly_chart(fig1, use_container_width=True)
+
+        spend = df.groupby("Date")["Total_cost"].sum().reset_index()
+        fig2 = px.line(spend, x="Date", y="Total_cost", title="Daily Spending")
+        st.plotly_chart(fig2, use_container_width=True)
+
+        brands = df.groupby("Brand")["Quantity"].sum().reset_index()
+        fig3 = px.pie(brands, names="Brand", values="Quantity", title="Brand Distribution")
+        st.plotly_chart(fig3, use_container_width=True)
