@@ -75,7 +75,7 @@ def ensure_headers(ws):
 @st.cache_data(ttl=240)
 def load_df(ws):
     try:
-        values = ws.get_all_records()  # skips header row
+        values = _ws.get_all_records()  # skips header row
         df = pd.DataFrame(values)
         # Backfill missing columns (if older data)
         for c in DEFAULT_COLUMNS:
