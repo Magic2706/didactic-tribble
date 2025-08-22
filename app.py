@@ -73,9 +73,14 @@ def ensure_headers(ws):
         st.stop()
 
 @st.cache_data(ttl=240)
-def load_df(ws):
+def load_df(sheet_url_or_title: str):
+    """Load dataframe from Google Sheet with caching"""
+    ws = open_sheet(sheet_url_or_title)
+    if ws is None:
+        return pd.DataFrame(columns=DEFAULT_COLUMNS)
+    
     try:
-        values = _ws.get_all_records()  # skips header row
+        values = ws.get_all_records()  # skips header row
         df = pd.DataFrame(values)
         # Backfill missing columns (if older data)
         for c in DEFAULT_COLUMNS:
@@ -106,7 +111,7 @@ def append_row(ws, row):
 def replace_row(ws, idx_1based, row):
     """Replace data row at 1-based index (>=2). Keeps header intact."""
     try:
-        ws.delete_row(idx_1based)
+        ws.delete_rows(idx_1based)
         ws.insert_row(row, idx_1based)
         clear_cache()
         st.toast("✏️ Updated", icon="✏️")
@@ -115,7 +120,7 @@ def replace_row(ws, idx_1based, row):
 
 def remove_row(ws, idx_1based):
     try:
-        ws.delete_row(idx_1based)
+        ws.delete_rows(idx_1based)
         clear_cache()
         st.toast("🗑️ Deleted", icon="🗑️")
     except Exception as e:
@@ -156,7 +161,7 @@ if ws is None:
     st.stop()
 
 ensure_headers(ws)
-df = load_df(ws)
+df = load_df(sheet_url_or_title)
 
 tab_add, tab_view, tab_analytics = st.tabs(["➕ Add Entry", "📄 View / Edit / Delete", "📈 Analytics"])
 
